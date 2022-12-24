@@ -91,6 +91,9 @@ struct Opts {
     #[arg(short, long, default_value = "60")]
     step: u64,
 
+    #[arg(long, default_value = "true")]
+    open: bool,
+
     #[arg(required(true))]
     query: Vec<String>,
 }
@@ -111,6 +114,8 @@ async fn main() {
     .await
     .expect("Request failed");
 
+    // TODO: Plot title
+    // TODO: Histogram/scatter
     let mut plot = Plot::new();
     let layout = Layout::new()
         .x_axis(Axis::new().auto_range(true))
@@ -125,5 +130,8 @@ async fn main() {
             .line(Line::new().dash(plotly::common::DashType::Solid));
         plot.add_trace(trace);
     }
-    plot.show();
+
+    if opts.open {
+        plot.show();
+    }
 }
