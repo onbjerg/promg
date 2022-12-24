@@ -45,8 +45,12 @@ struct Opts {
     step: u64,
 
     /// Open the plot in the browser.
-    #[arg(long, default_value = "true")]
+    #[arg(long)]
     open: bool,
+
+    /// Write the plot as embeddable HTML to stdout.
+    #[arg(long, default_value = "true")]
+    html: bool,
 
     /// The Prometheus range query.
     #[arg(required(true))]
@@ -88,5 +92,9 @@ async fn main() {
 
     if opts.open {
         plot.show();
+    }
+
+    if opts.html {
+        println!("{}", plot.to_inline_html(None));
     }
 }
