@@ -85,7 +85,7 @@ async fn main() {
         let (x, y): (Vec<f64>, Vec<String>) = result.values.into_iter().unzip();
         let trace = Scatter::new(x, y)
             .mode(plotly::common::Mode::Lines)
-            .name(result.metric.name)
+            .name(result.metric.to_string())
             .line(Line::new().dash(plotly::common::DashType::Solid));
         plot.add_trace(trace);
     }
