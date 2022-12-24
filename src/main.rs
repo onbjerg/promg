@@ -30,16 +30,16 @@ struct Opts {
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
-    let response = prometheus::range_query(
-        &opts.endpoint,
-        opts.query.into_iter().collect(),
-        1671820668 - 3600 * 10,
-        std::time::SystemTime::now()
+    let response = prometheus::RangeQuery {
+        query: opts.query.into_iter().collect(),
+        start: 1671820668 - 3600 * 10,
+        end: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs(),
-        opts.step,
-    )
+        step: opts.step,
+    }
+    .send(&opts.endpoint)
     .await
     .expect("Request failed");
 

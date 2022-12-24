@@ -71,31 +71,34 @@ impl fmt::Display for Metric {
     }
 }
 
-pub async fn range_query(
-    upstream: &str,
-    q: String,
-    start: u64,
-    end: u64,
-    step: u64,
-) -> Result<Response, reqwest::Error> {
-    let params = [
-        ("query", q),
-        ("start", start.to_string()),
-        ("end", end.to_string()),
-        ("step", step.to_string()),
-    ];
-    let response: Response = reqwest::Client::new()
-        .post(format!("{upstream}/api/v1/query_range"))
-        .form(&params)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
+pub struct RangeQuery {
+    pub query: String,
+    pub start: u64,
+    pub end: u64,
+    pub step: u64,
+}
 
-    if response.data.result_type != QueryResultType::Matrix {
-        unimplemented!()
+impl RangeQuery {
+    pub async fn send(self, endpoint: &str) -> Result<Response, reqwest::Error> {
+        let params = [
+            ("query", self.query),
+            ("start", self.start.to_string()),
+            ("end", self.end.to_string()),
+            ("step", self.step.to_string()),
+        ];
+        let response: Response = reqwest::Client::new()
+            .post(format!("{endpoint}/api/v1/query_range"))
+            .form(&params)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        if response.data.result_type != QueryResultType::Matrix {
+            unimplemented!()
+        }
+
+        Ok(response)
     }
-
-    Ok(response)
 }
