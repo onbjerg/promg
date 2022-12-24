@@ -1,0 +1,11 @@
+[package]
+name = "promg"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+plotly = "0.8.3"
+serde = { version = "1.0.151", features = ["derive"] }
+reqwest = { version = "0.11.13", features = ["json"] }
+tokio = { version = "1.23.0", features = ["full"] }
+clap = { version = "4.0.32", features = ["derive"] }
