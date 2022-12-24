@@ -61,7 +61,7 @@ async fn main() {
     let opts = Opts::parse();
 
     if let Err(err) = run(opts).await {
-        eprintln!("promg encountered an error: {err}");
+        eprintln!("promg encountered an error: {:#}", err);
         std::process::exit(1);
     }
 }
