@@ -39,6 +39,10 @@ struct Opts {
     #[arg(short, long, default_value_t = 60)]
     step: u64,
 
+    /// The title of the plot.
+    #[arg(short, long)]
+    title: Option<String>,
+
     /// Open the plot in the browser.
     #[arg(long)]
     open: bool,
@@ -63,8 +67,10 @@ async fn main() {
 }
 
 async fn run(opts: Opts) -> eyre::Result<()> {
+    let query: String = opts.query.into_iter().collect();
+    let title = opts.title.as_ref().unwrap_or(&query);
     let response = prometheus::RangeQuery {
-        query: opts.query.into_iter().collect(),
+        query: query.clone(),
         start: opts.start,
         end: opts.end,
         step: opts.step,
@@ -72,13 +78,14 @@ async fn run(opts: Opts) -> eyre::Result<()> {
     .send(&opts.endpoint)
     .await?;
 
-    // TODO: Plot title
     // TODO: Histogram/scatter
     let mut plot = Plot::new();
     let layout = Layout::new()
         .x_axis(Axis::new().auto_range(true))
-        .y_axis(Axis::new().auto_range(true));
+        .y_axis(Axis::new().auto_range(true))
+        .title(<String as AsRef<str>>::as_ref(title).into());
     plot.set_layout(layout);
+
     for result in response.data.result.into_iter() {
         // TODO: Custom formatting
         let (x, y): (Vec<f64>, Vec<String>) = result.values.into_iter().unzip();
