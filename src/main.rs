@@ -26,17 +26,17 @@ struct Opts {
     /// The start of the query range (UNIX timestamp)
     ///
     /// Defaults to 24 hours ago.
-    #[arg(short, long, default_value_t = yesterday())]
+    #[arg(long, default_value_t = yesterday())]
     start: u64,
 
     /// The end of the query range (UNIX timestamp)
     ///
     /// Defaults to now.
-    #[arg(short, long, default_value_t = now())]
+    #[arg(long, default_value_t = now())]
     end: u64,
 
     /// The range query step (in seconds)
-    #[arg(short, long, default_value_t = 60)]
+    #[arg(long, default_value_t = 60)]
     step: u64,
 
     /// The title of the plot.
