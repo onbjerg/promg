@@ -1,6 +1,15 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Request failed")]
+    Request(#[from] reqwest::Error),
+    #[error("Unsupported result type returned from query: {0:?}")]
+    UnsupportedResultType(QueryResultType),
+}
 
 #[derive(Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,7 +88,7 @@ pub struct RangeQuery {
 }
 
 impl RangeQuery {
-    pub async fn send(self, endpoint: &str) -> Result<Response, reqwest::Error> {
+    pub async fn send(self, endpoint: &str) -> Result<Response, Error> {
         let params = [
             ("query", self.query),
             ("start", self.start.to_string()),
@@ -96,9 +105,9 @@ impl RangeQuery {
             .await?;
 
         if response.data.result_type != QueryResultType::Matrix {
-            unimplemented!()
+            Err(Error::UnsupportedResultType(response.data.result_type))
+        } else {
+            Ok(response)
         }
-
-        Ok(response)
     }
 }

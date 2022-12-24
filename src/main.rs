@@ -30,6 +30,14 @@ struct Opts {
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
+
+    if let Err(err) = run(opts).await {
+        eprintln!("promg encountered an error: {err}");
+        std::process::exit(1);
+    }
+}
+
+async fn run(opts: Opts) -> eyre::Result<()> {
     let response = prometheus::RangeQuery {
         query: opts.query.into_iter().collect(),
         start: 1671820668 - 3600 * 10,
@@ -40,8 +48,7 @@ async fn main() {
         step: opts.step,
     }
     .send(&opts.endpoint)
-    .await
-    .expect("Request failed");
+    .await?;
 
     // TODO: Plot title
     // TODO: Histogram/scatter
@@ -67,4 +74,6 @@ async fn main() {
     if opts.html {
         println!("{}", plot.to_inline_html(None));
     }
+
+    Ok(())
 }
