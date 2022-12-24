@@ -33,17 +33,22 @@ async fn query(
     Ok(response)
 }
 
+/// Generate a plot from a Prometheus range query.
 #[derive(Parser, Debug)]
 struct Opts {
+    /// The Prometheus server endpoint.
     #[arg(short, long, default_value = "http://localhost:9090")]
     endpoint: String,
 
+    /// The range query step (in seconds)
     #[arg(short, long, default_value = "60")]
     step: u64,
 
+    /// Open the plot in the browser.
     #[arg(long, default_value = "true")]
     open: bool,
 
+    /// The Prometheus range query.
     #[arg(required(true))]
     query: Vec<String>,
 }
