@@ -3,6 +3,19 @@ use plotly::{common::Line, layout::Axis, Layout, Plot, Scatter};
 
 mod prometheus;
 
+const ONE_HOUR_IN_SECS: u64 = 3600;
+
+fn yesterday() -> u64 {
+    now() - ONE_HOUR_IN_SECS * 24
+}
+
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
 /// Generate a plot from a Prometheus range query.
 #[derive(Parser, Debug)]
 struct Opts {
@@ -10,8 +23,20 @@ struct Opts {
     #[arg(short, long, default_value = "http://localhost:9090")]
     endpoint: String,
 
+    /// The start of the query range (UNIX timestamp)
+    ///
+    /// Defaults to 24 hours ago.
+    #[arg(short, long, default_value_t = yesterday())]
+    start: u64,
+
+    /// The end of the query range (UNIX timestamp)
+    ///
+    /// Defaults to now.
+    #[arg(short, long, default_value_t = now())]
+    end: u64,
+
     /// The range query step (in seconds)
-    #[arg(short, long, default_value = "60")]
+    #[arg(short, long, default_value_t = 60)]
     step: u64,
 
     /// Open the plot in the browser.
@@ -40,11 +65,8 @@ async fn main() {
 async fn run(opts: Opts) -> eyre::Result<()> {
     let response = prometheus::RangeQuery {
         query: opts.query.into_iter().collect(),
-        start: 1671820668 - 3600 * 10,
-        end: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
+        start: opts.start,
+        end: opts.end,
         step: opts.step,
     }
     .send(&opts.endpoint)
