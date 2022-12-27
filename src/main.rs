@@ -1,5 +1,9 @@
+use crate::prometheus::QueryResult;
+use axum::{response::Html, routing::get, Router};
 use clap::Parser;
-use plotly::{common::Line, layout::Axis, Layout, Plot, Scatter};
+use poloto::num::timestamp::UnixTime;
+use std::time::Duration;
+use tower_livereload::LiveReloadLayer;
 
 mod prometheus;
 
@@ -17,7 +21,7 @@ fn now() -> u64 {
 }
 
 /// Generate a plot from a Prometheus range query.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 struct Opts {
     /// The Prometheus server endpoint.
     #[arg(short, long, default_value = "http://localhost:9090")]
@@ -44,11 +48,15 @@ struct Opts {
     title: Option<String>,
 
     /// Open the plot in the browser.
-    #[arg(long)]
+    #[arg(long, conflicts_with_all(["live", "html"]))]
     open: bool,
 
+    /// Open the plot in the browser and live-reload it.
+    #[arg(long, conflicts_with_all(["open", "html"]))]
+    live: bool,
+
     /// Write the plot as embeddable HTML to stdout.
-    #[arg(long, default_value = "true")]
+    #[arg(long, conflicts_with_all(["live", "open"]))]
     html: bool,
 
     /// The Prometheus range query.
@@ -61,47 +69,87 @@ async fn main() {
     let opts = Opts::parse();
 
     if let Err(err) = run(opts).await {
-        eprintln!("promg encountered an error: {:#}", err);
+        eprintln!("promg encountered an error: {err:#}");
         std::process::exit(1);
     }
 }
 
-async fn run(opts: Opts) -> eyre::Result<()> {
+async fn plot(title: String, items: Vec<QueryResult>) -> eyre::Result<String> {
+    // TODO: Histogram/scatter
+    let mut plots = Vec::new();
+    for result in items.into_iter() {
+        // TODO: Custom formatting
+        let data = result
+            .values
+            .into_iter()
+            .map(|(x, y)| (UnixTime(x as i64), y.parse::<f64>().unwrap()));
+        plots.push(poloto::build::plot(format!("{}", result.metric)).line(data));
+    }
+
+    let plot = poloto::header().with_viewbox([1200.0, 800.0]);
+    let opt = poloto::render::render_opt()
+        .with_tick_lines([true, true])
+        .with_viewbox(plot.get_viewbox())
+        .move_into();
+
+    let plot = poloto::data(plots)
+        .map_opt(|_| opt)
+        .build_and_label((title, "Date", ""))
+        .append_to(plot.dark_theme());
+
+    plot.render_string().map_err(Into::into)
+}
+
+async fn run(mut opts: Opts) -> eyre::Result<()> {
     let query: String = opts.query.into_iter().collect();
-    let title = opts.title.as_ref().unwrap_or(&query);
-    let response = prometheus::RangeQuery {
+    let title = opts.title.take().unwrap_or_else(|| query.clone());
+    let query = prometheus::RangeQuery {
         query: query.clone(),
         start: opts.start,
         end: opts.end,
         step: opts.step,
-    }
-    .send(&opts.endpoint)
-    .await?;
+    };
 
-    // TODO: Histogram/scatter
-    let mut plot = Plot::new();
-    let layout = Layout::new()
-        .x_axis(Axis::new().auto_range(true))
-        .y_axis(Axis::new().auto_range(true))
-        .title(<String as AsRef<str>>::as_ref(title).into());
-    plot.set_layout(layout);
+    if opts.open || opts.html {
+        // plot.show();
+        let response = query.send(&opts.endpoint).await?;
+        println!("{}", plot(title, response.data.result).await?);
+    } else if opts.live {
+        let reload_interval = opts.step;
+        let live_reload = LiveReloadLayer::new();
+        let reloader = live_reload.reloader();
+        let app = Router::new()
+            .route(
+                "/",
+                get(move || async move {
+                    Html(
+                        plot(
+                            title.clone(),
+                            query
+                                .clone()
+                                .send(&opts.endpoint.clone())
+                                .await
+                                .unwrap()
+                                .data
+                                .result,
+                        )
+                        .await
+                        .unwrap(),
+                    )
+                }),
+            )
+            .layer(live_reload);
 
-    for result in response.data.result.into_iter() {
-        // TODO: Custom formatting
-        let (x, y): (Vec<f64>, Vec<String>) = result.values.into_iter().unzip();
-        let trace = Scatter::new(x, y)
-            .mode(plotly::common::Mode::Lines)
-            .name(result.metric.to_string())
-            .line(Line::new().dash(plotly::common::DashType::Solid));
-        plot.add_trace(trace);
-    }
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(reload_interval / 2)).await;
+                reloader.reload();
+            }
+        });
 
-    if opts.open {
-        plot.show();
-    }
-
-    if opts.html {
-        println!("{}", plot.to_inline_html(None));
+        axum::Server::bind(&"0.0.0.0:8888".parse()?)
+            .serve(app.into_make_service())
+            .await?;
     }
 
     Ok(())

@@ -80,6 +80,7 @@ impl fmt::Display for Metric {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RangeQuery {
     pub query: String,
     pub start: u64,
