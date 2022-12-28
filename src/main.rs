@@ -51,7 +51,9 @@ struct Opts {
 
     /// The title of the plot.
     ///
-    /// Multiple titles can be specified by passing the flag multiple times. The number of titles must match the number of queries.
+    /// Multiple titles can be specified by passing the flag multiple times.
+    ///
+    /// The number of titles must match the number of queries.
     #[arg(short, long)]
     title: Vec<String>,
 
@@ -65,7 +67,9 @@ struct Opts {
 
     /// The Prometheus range query.
     ///
-    /// Multiple queries can be specified by passing the flag multiple times. The number of titles must match the number of queries.
+    /// Multiple queries can be specified by passing the flag multiple times.
+    ///
+    /// The number of titles must match the number of queries.
     #[arg(long, short, required(true))]
     query: Vec<String>,
 }
