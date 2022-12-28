@@ -2,7 +2,9 @@ use crate::prometheus::QueryResult;
 use axum::{response::Html, routing::get, Router};
 use clap::Parser;
 use poloto::num::timestamp::UnixTime;
+use std::net::SocketAddr;
 use std::time::Duration;
+use tokio::net::TcpListener;
 use tower_livereload::LiveReloadLayer;
 
 mod prometheus;
@@ -47,16 +49,12 @@ struct Opts {
     #[arg(short, long)]
     title: Option<String>,
 
-    /// Open the plot in the browser.
-    #[arg(long, conflicts_with_all(["live", "html"]))]
-    open: bool,
-
     /// Open the plot in the browser and live-reload it.
-    #[arg(long, conflicts_with_all(["open", "html"]))]
+    #[arg(long, conflicts_with("html"))]
     live: bool,
 
     /// Write the plot as embeddable HTML to stdout.
-    #[arg(long, conflicts_with_all(["live", "open"]))]
+    #[arg(long, conflicts_with("open"))]
     html: bool,
 
     /// The Prometheus range query.
@@ -110,8 +108,7 @@ async fn run(mut opts: Opts) -> eyre::Result<()> {
         step: opts.step,
     };
 
-    if opts.open || opts.html {
-        // plot.show();
+    if opts.html {
         let response = query.send(&opts.endpoint).await?;
         println!("{}", plot(title, response.data.result).await?);
     } else if opts.live {
@@ -147,9 +144,11 @@ async fn run(mut opts: Opts) -> eyre::Result<()> {
             }
         });
 
-        axum::Server::bind(&"0.0.0.0:8888".parse()?)
-            .serve(app.into_make_service())
-            .await?;
+        let addr: SocketAddr = { TcpListener::bind("127.0.0.1:0").await?.local_addr()? };
+        let handle = axum::Server::bind(&addr).serve(app.into_make_service());
+
+        open::that(format!("http://{addr}"))?;
+        handle.await?;
     }
 
     Ok(())
