@@ -1,7 +1,11 @@
-use crate::prometheus::QueryResult;
+use crate::prometheus::{QueryResult, RangeQuery};
+use axum::response::IntoResponse;
 use axum::{response::Html, routing::get, Router};
 use clap::Parser;
+use futures_util::stream::FuturesUnordered;
+use futures_util::stream::{StreamExt, TryStreamExt};
 use poloto::num::timestamp::UnixTime;
+use reqwest::StatusCode;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -46,8 +50,10 @@ struct Opts {
     step: u64,
 
     /// The title of the plot.
+    ///
+    /// Multiple titles can be specified by passing the flag multiple times. The number of titles must match the number of queries.
     #[arg(short, long)]
-    title: Option<String>,
+    title: Vec<String>,
 
     /// Open the plot in the browser and live-reload it.
     #[arg(long, conflicts_with("html"))]
@@ -58,7 +64,9 @@ struct Opts {
     html: bool,
 
     /// The Prometheus range query.
-    #[arg(required(true))]
+    ///
+    /// Multiple queries can be specified by passing the flag multiple times. The number of titles must match the number of queries.
+    #[arg(long, short, required(true))]
     query: Vec<String>,
 }
 
@@ -99,18 +107,33 @@ async fn plot(title: String, items: Vec<QueryResult>) -> eyre::Result<String> {
 }
 
 async fn run(mut opts: Opts) -> eyre::Result<()> {
-    let query: String = opts.query.into_iter().collect();
-    let title = opts.title.take().unwrap_or_else(|| query.clone());
-    let query = prometheus::RangeQuery {
-        query: query.clone(),
-        start: opts.start,
-        end: opts.end,
-        step: opts.step,
-    };
+    opts.title.reverse();
+    let mut queries: Vec<(Option<String>, RangeQuery)> = Vec::new();
+    for query in opts.query.into_iter() {
+        queries.push((
+            opts.title.pop(),
+            RangeQuery {
+                query,
+                start: opts.start,
+                end: opts.end,
+                step: opts.step,
+            },
+        ));
+    }
 
     if opts.html {
-        let response = query.send(&opts.endpoint).await?;
-        println!("{}", plot(title, response.data.result).await?);
+        let endpoint = opts.endpoint.as_ref();
+        let mut plots: FuturesUnordered<_> = queries
+            .into_iter()
+            .map(|(title, query)| async move {
+                let response = query.send(endpoint).await?;
+                plot(title.unwrap_or("".into()), response.data.result).await
+            })
+            .collect();
+
+        while let Some(plot) = plots.try_next().await? {
+            println!("{plot}");
+        }
     } else if opts.live {
         let reload_interval = opts.step;
         let live_reload = LiveReloadLayer::new();
@@ -119,20 +142,26 @@ async fn run(mut opts: Opts) -> eyre::Result<()> {
             .route(
                 "/",
                 get(move || async move {
-                    Html(
-                        plot(
-                            title.clone(),
-                            query
-                                .clone()
-                                .send(&opts.endpoint.clone())
-                                .await
-                                .unwrap()
-                                .data
-                                .result,
-                        )
-                        .await
-                        .unwrap(),
-                    )
+                    let endpoint = opts.endpoint.as_ref();
+                    let mut plots: FuturesUnordered<_> = queries
+                        .clone()
+                        .into_iter()
+                        .map(|(title, query)| async move {
+                            let response = query.send(endpoint).await?;
+                            plot(title.unwrap_or("".into()), response.data.result).await
+                        })
+                        .collect();
+                    let mut response = String::new();
+                    while let Some(plot) = plots.next().await {
+                        match plot {
+                            Ok(plot) => response.push_str(&plot),
+                            Err(_) => {
+                                return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong")
+                                    .into_response()
+                            }
+                        }
+                    }
+                    Html(response).into_response()
                 }),
             )
             .layer(live_reload);
