@@ -24,14 +24,14 @@ Options:
 
           Defaults to 24 hours ago.
 
-          [default: 1671784438]
+          [default: 1672118465]
 
       --end <END>
           The end of the query range (UNIX timestamp)
 
           Defaults to now.
 
-          [default: 1671870838]
+          [default: 1672204865]
 
       --step <STEP>
           The range query step (in seconds)
@@ -41,8 +41,8 @@ Options:
   -t, --title <TITLE>
           The title of the plot
 
-      --open
-          Open the plot in the browser
+      --live
+          Open the plot in the browser and live-reload it
 
       --html
           Write the plot as embeddable HTML to stdout

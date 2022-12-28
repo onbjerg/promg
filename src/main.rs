@@ -54,7 +54,7 @@ struct Opts {
     live: bool,
 
     /// Write the plot as embeddable HTML to stdout.
-    #[arg(long, conflicts_with("open"))]
+    #[arg(long, conflicts_with("live"))]
     html: bool,
 
     /// The Prometheus range query.
